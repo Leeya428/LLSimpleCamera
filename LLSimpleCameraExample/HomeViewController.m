@@ -9,7 +9,7 @@
 #import "HomeViewController.h"
 #import "ViewUtils.h"
 #import "ImageViewController.h"
-#import "VideoViewController.h"
+//#import "VideoViewController.h"
 
 @interface HomeViewController ()
 @property (strong, nonatomic) LLSimpleCamera *camera;
@@ -129,12 +129,12 @@
         [self.view addSubview:self.switchButton];
     }
     
-    self.segmentedControl = [[UISegmentedControl alloc] initWithItems:@[@"Picture",@"Video"]];
-    self.segmentedControl.frame = CGRectMake(12.0f, screenRect.size.height - 67.0f, 120.0f, 32.0f);
-    self.segmentedControl.selectedSegmentIndex = 0;
-    self.segmentedControl.tintColor = [UIColor whiteColor];
-    [self.segmentedControl addTarget:self action:@selector(segmentedControlValueChanged:) forControlEvents:UIControlEventValueChanged];
-    [self.view addSubview:self.segmentedControl];
+//    self.segmentedControl = [[UISegmentedControl alloc] initWithItems:@[@"Picture",@"Video"]];
+//    self.segmentedControl.frame = CGRectMake(12.0f, screenRect.size.height - 67.0f, 120.0f, 32.0f);
+//    self.segmentedControl.selectedSegmentIndex = 0;
+//    self.segmentedControl.tintColor = [UIColor whiteColor];
+//    [self.segmentedControl addTarget:self action:@selector(segmentedControlValueChanged:) forControlEvents:UIControlEventValueChanged];
+//    [self.view addSubview:self.segmentedControl];
 }
 
 - (void)segmentedControlValueChanged:(UISegmentedControl *)control
@@ -184,47 +184,181 @@
 {
     __weak typeof(self) weakSelf = self;
     
-    if(self.segmentedControl.selectedSegmentIndex == 0) {
-        // capture
-        [self.camera capture:^(LLSimpleCamera *camera, UIImage *image, NSDictionary *metadata, NSError *error) {
-            if(!error) {
-                ImageViewController *imageVC = [[ImageViewController alloc] initWithImage:image];
-                [weakSelf presentViewController:imageVC animated:NO completion:nil];
-            }
-            else {
-                NSLog(@"An error has occured: %@", error);
-            }
-        } exactSeenImage:YES];
-        
-    } else {
-        if(!self.camera.isRecording) {
-            self.segmentedControl.hidden = YES;
-            self.flashButton.hidden = YES;
-            self.switchButton.hidden = YES;
+    [self.camera capture:^(LLSimpleCamera *camera, UIImage *image, NSDictionary *metadata, NSError *error) {
+        if(!error) {
             
-            self.snapButton.layer.borderColor = [UIColor redColor].CGColor;
-            self.snapButton.backgroundColor = [[UIColor redColor] colorWithAlphaComponent:0.5];
+            NSString *tempFileName = [[NSUUID UUID] UUIDString];
+            NSString *fileName =[tempFileName stringByAppendingString:@".jpg"];;
+            NSString *path = [[NSTemporaryDirectory()stringByStandardizingPath] stringByAppendingPathComponent:fileName];
+
+            image = [self fixOrientation:image];  // Rotate the image for upload to web
             
-            // start recording
-            NSURL *outputURL = [[[self applicationDocumentsDirectory]
-                                 URLByAppendingPathComponent:@"test1"] URLByAppendingPathExtension:@"mov"];
-            [self.camera startRecordingWithOutputUrl:outputURL didRecord:^(LLSimpleCamera *camera, NSURL *outputFileUrl, NSError *error) {
-                VideoViewController *vc = [[VideoViewController alloc] initWithVideoUrl:outputFileUrl];
-                [self.navigationController pushViewController:vc animated:YES];
-            }];
+            // If needed, downscale image
+            float maxWidth = image.size.width;
+            float maxHeight = image.size.height;
             
-        } else {
-            self.segmentedControl.hidden = NO;
-            self.flashButton.hidden = NO;
-            self.switchButton.hidden = NO;
+            image = [self downscaleImageIfNecessary:image maxWidth:maxWidth maxHeight:maxHeight];
             
-            self.snapButton.layer.borderColor = [UIColor whiteColor].CGColor;
-            self.snapButton.backgroundColor = [[UIColor whiteColor] colorWithAlphaComponent:0.5];
+            NSData *data = UIImageJPEGRepresentation(image,.6);
+
+             [data writeToFile:path atomically:YES];
             
-            [self.camera stopRecording];
+            NSLog(@"%@",path);
+            
+            UIImage *img = [UIImage imageWithContentsOfFile:path];
+            
+            ImageViewController *imageVC = [[ImageViewController alloc] initWithImage:img];
+            [weakSelf presentViewController:imageVC animated:NO completion:nil];
         }
-    }
+        else {
+            NSLog(@"An error has occured: %@", error);
+        }
+    } exactSeenImage:YES];
+    
+//
+//    if(self.segmentedControl.selectedSegmentIndex == 0) {
+//        // capture
+//        [self.camera capture:^(LLSimpleCamera *camera, UIImage *image, NSDictionary *metadata, NSError *error) {
+//            if(!error) {
+//                ImageViewController *imageVC = [[ImageViewController alloc] initWithImage:image];
+//                [weakSelf presentViewController:imageVC animated:NO completion:nil];
+//            }
+//            else {
+//                NSLog(@"An error has occured: %@", error);
+//            }
+//        } exactSeenImage:YES];
+//
+//    } else {
+//        if(!self.camera.isRecording) {
+//            self.segmentedControl.hidden = YES;
+//            self.flashButton.hidden = YES;
+//            self.switchButton.hidden = YES;
+//
+//            self.snapButton.layer.borderColor = [UIColor redColor].CGColor;
+//            self.snapButton.backgroundColor = [[UIColor redColor] colorWithAlphaComponent:0.5];
+//
+//            // start recording
+//            NSURL *outputURL = [[[self applicationDocumentsDirectory]
+//                                 URLByAppendingPathComponent:@"test1"] URLByAppendingPathExtension:@"mov"];
+//            [self.camera startRecordingWithOutputUrl:outputURL didRecord:^(LLSimpleCamera *camera, NSURL *outputFileUrl, NSError *error) {
+//                VideoViewController *vc = [[VideoViewController alloc] initWithVideoUrl:outputFileUrl];
+//                [self.navigationController pushViewController:vc animated:YES];
+//            }];
+//
+//        } else {
+//            self.segmentedControl.hidden = NO;
+//            self.flashButton.hidden = NO;
+//            self.switchButton.hidden = NO;
+//
+//            self.snapButton.layer.borderColor = [UIColor whiteColor].CGColor;
+//            self.snapButton.backgroundColor = [[UIColor whiteColor] colorWithAlphaComponent:0.5];
+//
+//            [self.camera stopRecording];
+//        }
+//    }
 }
+- (UIImage*)downscaleImageIfNecessary:(UIImage*)image maxWidth:(float)maxWidth maxHeight:(float)maxHeight
+{
+    UIImage* newImage = image;
+    
+    // Nothing to do here
+    if (image.size.width <= maxWidth && image.size.height <= maxHeight) {
+        return newImage;
+    }
+    
+    CGSize scaledSize = CGSizeMake(image.size.width, image.size.height);
+    if (maxWidth < scaledSize.width) {
+        scaledSize = CGSizeMake(maxWidth, (maxWidth / scaledSize.width) * scaledSize.height);
+    }
+    if (maxHeight < scaledSize.height) {
+        scaledSize = CGSizeMake((maxHeight / scaledSize.height) * scaledSize.width, maxHeight);
+    }
+    
+    // If the pixels are floats, it causes a white line in iOS8 and probably other versions too
+    scaledSize.width = (int)scaledSize.width;
+    scaledSize.height = (int)scaledSize.height;
+    
+    UIGraphicsBeginImageContext(scaledSize); // this will resize
+    [image drawInRect:CGRectMake(0, 0, scaledSize.width, scaledSize.height)];
+    newImage = UIGraphicsGetImageFromCurrentImageContext();
+    if (newImage == nil) {
+        NSLog(@"could not scale image");
+    }
+    UIGraphicsEndImageContext();
+    
+    return newImage;
+}
+
+- (UIImage *)fixOrientation:(UIImage *)srcImg {
+    if (srcImg.imageOrientation == UIImageOrientationUp) {
+        return srcImg;
+    }
+    
+    CGAffineTransform transform = CGAffineTransformIdentity;
+    switch (srcImg.imageOrientation) {
+        case UIImageOrientationDown:
+        case UIImageOrientationDownMirrored:
+            transform = CGAffineTransformTranslate(transform, srcImg.size.width, srcImg.size.height);
+            transform = CGAffineTransformRotate(transform, M_PI);
+            break;
+            
+        case UIImageOrientationLeft:
+        case UIImageOrientationLeftMirrored:
+            transform = CGAffineTransformTranslate(transform, srcImg.size.width, 0);
+            transform = CGAffineTransformRotate(transform, M_PI_2);
+            break;
+            
+        case UIImageOrientationRight:
+        case UIImageOrientationRightMirrored:
+            transform = CGAffineTransformTranslate(transform, 0, srcImg.size.height);
+            transform = CGAffineTransformRotate(transform, -M_PI_2);
+            break;
+        case UIImageOrientationUp:
+        case UIImageOrientationUpMirrored:
+            break;
+    }
+    
+    switch (srcImg.imageOrientation) {
+        case UIImageOrientationUpMirrored:
+        case UIImageOrientationDownMirrored:
+            transform = CGAffineTransformTranslate(transform, srcImg.size.width, 0);
+            transform = CGAffineTransformScale(transform, -1, 1);
+            break;
+            
+        case UIImageOrientationLeftMirrored:
+        case UIImageOrientationRightMirrored:
+            transform = CGAffineTransformTranslate(transform, srcImg.size.height, 0);
+            transform = CGAffineTransformScale(transform, -1, 1);
+            break;
+        case UIImageOrientationUp:
+        case UIImageOrientationDown:
+        case UIImageOrientationLeft:
+        case UIImageOrientationRight:
+            break;
+    }
+    
+    CGContextRef ctx = CGBitmapContextCreate(NULL, srcImg.size.width, srcImg.size.height, CGImageGetBitsPerComponent(srcImg.CGImage), 0, CGImageGetColorSpace(srcImg.CGImage), CGImageGetBitmapInfo(srcImg.CGImage));
+    CGContextConcatCTM(ctx, transform);
+    switch (srcImg.imageOrientation) {
+        case UIImageOrientationLeft:
+        case UIImageOrientationLeftMirrored:
+        case UIImageOrientationRight:
+        case UIImageOrientationRightMirrored:
+            CGContextDrawImage(ctx, CGRectMake(0,0,srcImg.size.height,srcImg.size.width), srcImg.CGImage);
+            break;
+            
+        default:
+            CGContextDrawImage(ctx, CGRectMake(0,0,srcImg.size.width,srcImg.size.height), srcImg.CGImage);
+            break;
+    }
+    
+    CGImageRef cgimg = CGBitmapContextCreateImage(ctx);
+    UIImage *img = [UIImage imageWithCGImage:cgimg];
+    CGContextRelease(ctx);
+    CGImageRelease(cgimg);
+    return img;
+}
+
 
 /* other lifecycle methods */
 

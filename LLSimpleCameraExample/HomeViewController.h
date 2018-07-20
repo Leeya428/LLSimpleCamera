@@ -10,5 +10,5 @@
 #import "LLSimpleCamera.h"
 
 @interface HomeViewController : UIViewController
-
+@property(nonatomic,copy)void(^down)(void);
 @end
